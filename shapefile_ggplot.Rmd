@@ -1,0 +1,109 @@
+---
+title: "Introduction à la cartographie dans R: fusion de polygones"
+author: "Richard Amegble"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(tidyverse)
+```
+
+## Introduction
+Dans ce Tutoriel nous allons apprendre:
+
+- Comment faire un map avec ggplot2
+- Comment aggréger deux polygones 
+
+[Le shapefile du Togo](https://data.humdata.org/dataset/cod-ab-tgo?#)
+
+### Lire le fichier .shp
+```{r}
+shape_file<-"./Shapefiles/tgo_admbnda_adm3_inseed_20210107.shp"
+sf_df<-read_sf(shape_file)
+
+```
+
+### Dessiner la fonction `plot` de la librairie de base
+
+```{r}
+plot(sf_df)
+```
+
+### Dessiner le région avec la librairie ggplot2
+
+```{r}
+p<-ggplot(data=sf_df)+
+  geom_sf(aes(fill=ADM1_FR))+
+  labs(fill="Région")+
+  theme_minimal()
+p
+```
+### Dessiner uniquement sans les découpages municipales
+
+```{r}
+str(sf_df)
+```
+
+1. Aggrégation de la variable `geometry` suivant la variable ADM1_FR
+
+```{r}
+sf_region_df<-sf_df|>
+             group_by(ADM1_FR)|>
+             summarise(geometry=st_union(geometry))
+head(sf_region_df)
+```
+
+2. Dessiner la carte
+
+```{r}
+p<-ggplot(data=sf_region_df)+
+  geom_sf(aes(fill=ADM1_FR))+
+  labs(fill="Région")+
+  theme_minimal()
+p
+```
+
+### Isoler Lomé commune sur la carte
+
+```{r}
+isole_lieu<-"Lome Commune"
+
+sf_df_iso<-sf_df|>
+           mutate(ADM1_FR_I=case_match(ADM2_FR,
+                                      isole_lieu~isole_lieu,
+                                      .default =ADM1_FR ))|>
+           group_by(ADM1_FR_I)|>
+           summarise(geometry=st_union(geometry))
+
+```
+
+- Redessiner la carte avec Lomé commune
+
+```{r}
+p<-ggplot(data=sf_df_iso)+
+  geom_sf(aes(fill=ADM1_FR_I))+
+  labs(fill="Région")+
+  theme_minimal()
+p
+```
+
+- Incidence de pauverté au Togo par région Lomé: source PNUD 2011
+```{r}
+Incidence_Pauvrete<-data.frame(region=c("Centrale",     "Kara" ,        "Lome Commune", "Maritime",     "Plateaux" ,    "Savanes"  ), 
+                               Incidence=c(76.0,68.9,27.0,45.3,65.9,87.3))
+
+sf_df_iso_f<-sf_df_iso|>
+           left_join(Incidence_Pauvrete, by=c("ADM1_FR_I"="region"))
+```
+
+
+```{r}
+p<-ggplot(data=sf_df_iso_f)+
+  geom_sf(aes(fill=Incidence))+
+  labs(fill="Incidence de pauvreté")+
+  theme_minimal()
+p
+```
